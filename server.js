@@ -235,7 +235,7 @@ app.get('/search', async (req, res) => {
   <meta charset='UTF-8'>
   <meta name='viewport' content='width=device-width, initial-scale=1.0'>
   <title>Proxy Search - Web Proxy</title>
-  <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css' rel='stylesheet'>
+  <link href='https://bootswatch.com/5/cyborg/bootstrap.min.css' rel='stylesheet'>
   <style>
     body { padding: 2rem; background-color: #f8f9fa; }
     .container { max-width: 800px; }
@@ -292,8 +292,8 @@ app.get('/search', async (req, res) => {
 <head>
   <meta charset='UTF-8'>
   <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-  <title>Search results for &quot;${q}&quot; - Web Proxy</title>
-  <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css' rel='stylesheet'>
+  <title>Search results for &quot;${q}&quot; - Cashback-Bot Proxy</title>
+  <link href='https://bootswatch.com/5/cyborg/bootstrap.min.css' rel='stylesheet'>
   <style>
     body { padding: 2rem; background-color: #f8f9fa; }
     .container { max-width: 800px; }
@@ -340,7 +340,7 @@ app.get('/', (req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web Proxy</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://bootswatch.com/5/cyborg/bootstrap.min.css" rel="stylesheet">
     <style>
       body { padding: 2rem; background-color: #f8f9fa; }
       .container { max-width: 800px; }
