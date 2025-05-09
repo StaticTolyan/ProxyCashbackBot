@@ -234,7 +234,7 @@ app.get('/search', async (req, res) => {
 <head>
   <meta charset='UTF-8'>
   <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-  <title>Proxy Search - Web Proxy</title>
+  <title>Proxy Search - Cashback-Bot Proxy</title>
   <link href='https://bootswatch.com/5/cyborg/bootstrap.min.css' rel='stylesheet'>
   <style>
     body { padding: 2rem; }
@@ -339,7 +339,7 @@ app.get('/', (req, res) => {
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Proxy</title>
+    <title>Cashback-Bot Proxy</title>
     <link href="https://bootswatch.com/5/cyborg/bootstrap.min.css" rel="stylesheet">
     <style>
       body { padding: 2rem; }
@@ -348,7 +348,7 @@ app.get('/', (req, res) => {
   </head>
   <body>
     <div class="container">
-      <h1 class="text-center mb-4">Web Proxy</h1>
+      <h1 class="text-center mb-4">Cashback-Bot Proxy</h1>
       <form class="input-group mb-3" id="smartForm">
         <input type="text" class="form-control" id="smartInput" placeholder="Enter URL or search query" />
         <button class="btn btn-primary" type="submit">Go</button>
