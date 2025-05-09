@@ -1,0 +1,47 @@
+.cashback-block{
+    padding-bottom: 40px;
+}
+.cashback-line{
+    text-align: center;
+    background-color: red;
+    top: 0;
+    position: fixed;
+    font-size: 18px;
+    padding: 10px 0;
+    width: 100%;
+    z-index: 10004;
+}
+.cashback-line a,.cashback-line a:active,.cashback-line a:link,.cashback-line a:visited{
+    color:white;
+    font-size: 16px;
+}
+
+.cashback-line a:hover{
+    color:white;
+    text-decoration: underline;
+}
+
+
+#cashback-block-green{
+    padding-bottom: 40px;
+}
+.line-green{
+    text-align: center;
+    background-color: green;
+    top: 0;
+    position:  fixed;
+    font-size: 18px;
+    padding: 10px 0;
+    width:  100%;
+    z-index: 10004;
+}
+.line-green span{
+    color: white;
+    font-size: 16px;
+}
+
+.disable-cashback-line img{
+    width: 25px;
+    position: absolute;
+    right: 30px;
+}

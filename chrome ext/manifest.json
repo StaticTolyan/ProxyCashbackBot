@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Cashback-bot.com",
+  "description": "Cashback-bot - кэшбэк сервис",
+  "version": "1.1.10",
+  "icons": {
+    "128": "/img/128.png",
+    "48": "/img/48.png",
+    "16": "/img/16.png"
+  },
+  "action": {
+    "default_icon": "/img/48.png",
+    "default_popup": "popup.html"
+  },
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "permissions": [
+    "tabs",
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "background": {
+    "service_worker": "js/background-worker.js",
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' https://openfpcdn.io/fingerprintjs/v3; object-src 'self'"
+  },
+  "web_accessible_resources": [{
+    "resources": ["templates/*", "libs/*", "js/*", "css/*", "img/*"],
+    "matches": ["https://*/*", "http://*/*"]
+  }],
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://*/*"],
+      "css": ["css/inject.css"],
+      "js": ["libs/jquery.min.js", "js/inject.js", "js/content-script.js"]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "croxyproxy-clone-server",
+  "version": "1.0.0",
+  "description": "Simple web proxy server similar to CroxyProxy",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.3.5",
+    "cheerio": "^1.0.0-rc.12"
+  }
+}

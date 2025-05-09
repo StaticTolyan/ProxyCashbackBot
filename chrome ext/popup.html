@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title></title>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/font-awesome.min.css">
+    <link rel="stylesheet" href="/css/jssocials.css">
+    <link rel="stylesheet" href="/css/jssocials-theme-flat.css">
+    <link rel="stylesheet" href="/css/main.css">
+    <script src="/libs/jquery.min.js"></script>
+    <script src="/libs/bootstrap.min.js"></script>
+    <script src="/libs/purify.min.js"></script>
+    <script src="/libs/jquery.translate.js"></script>
+    <script src="/libs/clipboard.min.js"></script>
+    <script src="/libs/jssocials.min.js"></script>
+    <script src="/js/translate_dictionary.js"></script>
+    <script src="/config.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/app.js"></script>
+</head>
+<body class="bg-light">
+
+<div class="all-page">
+    <div class="main-window">
+        <main role="main" class="container">
+
+            <div class="row  m-2 pb-2 border-bottom border-gray">
+                <div class="col-5"><img id="main-logo" src="" width="150px"></div>
+                <div class="col-7">
+                    <div class="show-auth-user float-right">
+                        <span class="user-info"></span><br>
+                        <span class="trn">Balance:</span> <span id="userBalance"></span><br>
+                        <span class="trn">Code:</span> <span id="userCode"></span>
+                    </div>
+                    <span class="auth-block float-right">
+                        <a class="btn btn-danger trn" target="_blank" href="#">Log in</a>
+                    </span>
+                </div>
+            </div>
+            <div class="p-2 bg-white rounded box-shadow">
+                <ul class="nav nav-pills nav-fill show-auth-user" id="pills-tab" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="pills-home-tab" data-toggle="pill" href="#pills-home" role="tab" aria-controls="pills-home" aria-selected="true">
+                            <span class="trn">The shops</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-profile-tab" data-toggle="pill" href="#pills-profile" role="tab" aria-controls="pills-profile" aria-selected="false">
+                            <span class="trn">My purchases</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="pills-contact-tab" data-toggle="pill" href="#pills-contact" role="tab" aria-controls="pills-contact" aria-selected="false">
+                            <span class="trn">Invite a friend</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="tab-content" id="pills-tabContent">
+                <div class="tab-pane fade show active" id="pills-home" role="tabpanel" aria-labelledby="pills-home-tab">
+                    <div class="my-3 p-3 bg-white rounded box-shadow">
+                        <h6 class="border-bottom border-gray pb-2 mb-0 trn">New stores</h6>
+
+                        <div class="mt-3">
+                            <div class="list-group new-shops">
+
+                            </div>
+                        </div>
+                        <small class="d-block text-right mt-3">
+                            <a href="#" class="trn" id="all-shop-link" target="_blank">All shops</a>
+                        </small>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="pills-profile" role="tabpanel" aria-labelledby="pills-profile-tab">
+                    <div class="my-3 p-3 bg-white rounded box-shadow">
+                        <h6 class="border-bottom border-gray pb-2 mb-0 trn">Last orders</h6>
+                        <div class="mt-3">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                    <tr>
+                                        <th scope="col" class="trn">Store</th>
+                                        <th scope="col" class="trn">Cashback</th>
+                                        <th scope="col" class="trn">Status</th>
+                                    </tr>
+                                    </thead>
+                                </table>
+                                <div class="orders-list">
+                                </div>
+                            </div>
+                            <small class="d-block text-right mt-3">
+                                <a href="#" class="trn" id="all-order-link" target="_blank">See all orders</a>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-pane fade" id="pills-contact" role="tabpanel" aria-labelledby="pills-contact-tab">
+                    <div class="my-3 p-3 bg-white rounded box-shadow">
+                        <h6 class="border-bottom border-gray pb-2 mb-0 trn">Referral program</h6>
+
+                        <div class="mt-3">
+                            <h5 class="text-center mb-2"><span class="trn">Referral balance:</span> <span id="userReferralBalance"></span></h5>
+                            <p>
+                                <span class="trn">Bring friends and earn</span> <b><span id="ref-percent"></span> <span class="trn">from their cashback.</span></b>
+                            </p>
+                            <div class="alert alert-warning" role="alert">
+                                <span class="trn">To start earning, you need to share your referral link to our site.</span>
+                            </div>
+                            <div id="shareRoundIcons" class="text-center"></div>
+                            <form>
+                                <div class="form-group row">
+                                    <label for="referral-link" class="col-sm-2 col-form-label trn">Your referral link:</label>
+                                    <div class="col-sm-10">
+                                        <input class="form-control" id="referral-link" value="0">
+                                    </div>
+                                </div>
+                                <button type="button" data-clipboard-target="#referral-link" class="btn btn-primary btn-sm mb-2 copyRefLink trn">Copy</button>
+                            </form>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-2 mt-2 mb-4 bg-white rounded box-shadow text-center support-email"></div>
+        </main>
+    </div>
+
+    <div class="error-block">
+        <main role="main" class="container">
+            <div class="jumbotron jumbotron-fluid m-2">
+                <div class="container">
+                    <h1 class="display-5 trn">An error has occurred</h1>
+                    <p class="lead trn">If you see this message, write to us <br><b class="support-email"></b></p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="for-translate" style="display: none">
+        <span class="active-text trn">Cashback successfully activated!</span>
+        <span class="s-copy-text trn">Successfully copied.</span>
+        <span class="share-text trn">Register in cashback service, get some money back for every purchase.</span>
+    </div>
+
+</div>
+
+</body>
+</html>
