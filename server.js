@@ -265,9 +265,9 @@ app.get('/', async (req, res) => {
       
       if (results.length > 0) {
         resultsHtml = `
-        <div class="mt-4">
-          <h2 class="text-center mb-3">Search results for "${q}"</h2>
-          <ul class="list-group mb-4">
+        <div class="mt-3 mt-md-4">
+          <h2 class="text-center mb-2 mb-md-3">Search results for "${q}"</h2>
+          <ul class="list-group mb-3 mb-md-4">
         `;
         
         results.forEach(r => {
@@ -282,8 +282,8 @@ app.get('/', async (req, res) => {
         resultsHtml += `</ul></div>`;
       } else {
         resultsHtml = `
-        <div class="mt-4 text-center">
-          <h2 class="mb-3">Search results for "${q}"</h2>
+        <div class="mt-3 mt-md-4 text-center">
+          <h2 class="mb-2 mb-md-3">Search results for "${q}"</h2>
           <p>No results found. Try a different search.</p>
         </div>
         `;
@@ -291,7 +291,7 @@ app.get('/', async (req, res) => {
     } catch (error) {
       console.error('Search error:', error.message);
       resultsHtml = `
-      <div class="mt-4 text-center alert alert-danger">
+      <div class="mt-3 mt-md-4 text-center alert alert-danger">
         <p>Search error occurred. Please try again.</p>
       </div>
       `;
@@ -304,12 +304,98 @@ app.get('/', async (req, res) => {
 <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>${q ? `Search: ${q} - ` : ''}Cashback-Bot Proxy</title>
     <link href="https://bootswatch.com/5/cyborg/bootstrap.min.css" rel="stylesheet">
     <style>
-      body { padding: 2rem; }
-      .container { max-width: 800px; }
+      /* Mobile-first base styles */
+      body { 
+        padding: 1rem; 
+        font-size: 16px;
+      }
+      .container { 
+        width: 100%;
+        padding: 0 10px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.75rem;
+        margin-bottom: 1.25rem;
+      }
+      h2 {
+        font-size: 1.4rem;
+        margin-bottom: 1rem;
+      }
+      .input-group {
+        flex-direction: column;
+      }
+      .input-group .form-control {
+        border-radius: 4px;
+        margin-bottom: 0.5rem;
+        width: 100%;
+      }
+      .input-group .btn {
+        border-radius: 4px;
+        width: 100%;
+      }
+      .list-group-item {
+        padding: 0.75rem;
+      }
+      .list-group-item a {
+        font-size: 1.1rem;
+        word-break: break-word;
+      }
+      .list-group-item p {
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+      }
+
+      /* Larger screens (tablets and up) */
+      @media (min-width: 576px) {
+        body {
+          padding: 1.5rem;
+        }
+        .container {
+          max-width: 540px;
+          padding: 0 15px;
+        }
+        h1 {
+          font-size: 2rem;
+        }
+        .input-group {
+          flex-direction: row;
+        }
+        .input-group .form-control {
+          margin-bottom: 0;
+          border-top-right-radius: 0;
+          border-bottom-right-radius: 0;
+        }
+        .input-group .btn {
+          width: auto;
+          border-top-left-radius: 0;
+          border-bottom-left-radius: 0;
+        }
+      }
+
+      /* Desktop screens */
+      @media (min-width: 768px) {
+        body {
+          padding: 2rem;
+        }
+        .container {
+          max-width: 720px;
+        }
+        h1 {
+          font-size: 2.25rem;
+        }
+      }
+
+      /* Large desktop screens */
+      @media (min-width: 992px) {
+        .container {
+          max-width: 800px;
+        }
+      }
     </style>
   </head>
   <body>
