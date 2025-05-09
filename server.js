@@ -17,6 +17,9 @@ function rewriteLinks(html, baseUrl) {
   $('base').remove();
   // Remove restrictive meta tags (e.g., Content-Security-Policy)
   $('meta[http-equiv]').remove();
+  // Ensure mobile viewport is present
+  $('meta[name="viewport"]').remove();
+  $('head').prepend('<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">');
   // Inject proxying for dynamic fetch and XHR
   $('head').prepend('<script>(function(){var f=window.fetch;window.fetch=function(i,n){var u=(typeof i=="string"?i:i.url);return f.call(this,"/proxy?url="+encodeURIComponent(u),n)};var o=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){arguments[1]="/proxy?url="+encodeURIComponent(u);return o.apply(this,arguments)};})();</script>');
   // Rewrite inline <style> tags
@@ -157,7 +160,7 @@ app.get('/proxy', async (req, res) => {
       responseType: 'arraybuffer',
       validateStatus: status => status < 500,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
       },
