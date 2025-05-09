@@ -225,121 +225,87 @@ app.get('/proxy', async (req, res) => {
 });
 
 // Search endpoint
-app.get('/search', async (req, res) => {
+// Root - handles both homepage and search
+app.get('/', async (req, res) => {
   const { q } = req.query;
-  if (!q) {
-    res.send(`
-<!DOCTYPE html>
-<html lang='en'>
-<head>
-  <meta charset='UTF-8'>
-  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-  <title>Proxy Search - Cashback-Bot Proxy</title>
-  <link href='https://bootswatch.com/5/cyborg/bootstrap.min.css' rel='stylesheet'>
-  <style>
-    body { padding: 2rem; }
-    .container { max-width: 800px; }
-  </style>
-</head>
-<body>
-  <div class='container'>
-    <h1 class='text-center mb-4'>Proxy Search</h1>
-    <form class='input-group mb-3' method='get' action='/search'>
-      <input type='text' class='form-control' name='q' placeholder='Search DuckDuckGo' aria-label='Search query' />
-      <button class='btn btn-primary' type='submit'>Search</button>
-    </form>
-    <div>
-      <a href='/' class='btn btn-link'>Home</a>
-    </div>
-  </div>
-  <script src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js'></script>
-</body>
-</html>
-    `);
-    return;
-  }
-  try {
-    const ddgRes = await axios.get('https://duckduckgo.com/html/', { params: { q } });
-    const html = ddgRes.data;
-    const $ = cheerio.load(html);
-    const results = [];
-    $('a.result__a').each((i, el) => {
-      const $el = $(el);
-      const title = $el.text().trim();
-      let href = $el.attr('href');
-      if (!href) return;
-      try {
-        const parsed = new URL(href, 'https://duckduckgo.com');
-        let link;
-        if (parsed.searchParams.has('uddg')) {
-          link = parsed.searchParams.get('uddg');
-        } else if (parsed.searchParams.has('u')) {
-          link = parsed.searchParams.get('u');
-        } else {
-          link = parsed.href;
+  let resultsHtml = '';
+  
+  // If search query exists, fetch and process search results
+  if (q) {
+    try {
+      const ddgRes = await axios.get('https://duckduckgo.com/html/', { params: { q } });
+      const html = ddgRes.data;
+      const $ = cheerio.load(html);
+      const results = [];
+      
+      $('a.result__a').each((i, el) => {
+        const $el = $(el);
+        const title = $el.text().trim();
+        let href = $el.attr('href');
+        if (!href) return;
+        
+        try {
+          const parsed = new URL(href, 'https://duckduckgo.com');
+          let link;
+          if (parsed.searchParams.has('uddg')) {
+            link = parsed.searchParams.get('uddg');
+          } else if (parsed.searchParams.has('u')) {
+            link = parsed.searchParams.get('u');
+          } else {
+            link = parsed.href;
+          }
+          link = decodeURIComponent(link);
+          new URL(link);
+          const snippet = $el.closest('.result').find('.result__snippet').text().trim();
+          results.push({ title, href: link, snippet });
+        } catch {
+          // skip invalid URLs
         }
-        link = decodeURIComponent(link);
-        new URL(link);
-        const snippet = $el.closest('.result').find('.result__snippet').text().trim();
-        results.push({ title, href: link, snippet });
-      } catch {
-        // skip invalid URLs
+      });
+      
+      if (results.length > 0) {
+        resultsHtml = `
+        <div class="mt-4">
+          <h2 class="text-center mb-3">Search results for "${q}"</h2>
+          <ul class="list-group mb-4">
+        `;
+        
+        results.forEach(r => {
+          resultsHtml += `
+          <li class="list-group-item">
+            <a href="/proxy?url=${encodeURIComponent(r.href)}">${r.title}</a>
+            <p class="mb-1">${r.snippet}</p>
+          </li>
+          `;
+        });
+        
+        resultsHtml += `</ul></div>`;
+      } else {
+        resultsHtml = `
+        <div class="mt-4 text-center">
+          <h2 class="mb-3">Search results for "${q}"</h2>
+          <p>No results found. Try a different search.</p>
+        </div>
+        `;
       }
-    });
-    let resultHtml = `
-<!DOCTYPE html>
-<html lang='en'>
-<head>
-  <meta charset='UTF-8'>
-  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-  <title>Search results for &quot;${q}&quot; - Cashback-Bot Proxy</title>
-  <link href='https://bootswatch.com/5/cyborg/bootstrap.min.css' rel='stylesheet'>
-  <style>
-    body { padding: 2rem; }
-    .container { max-width: 800px; }
-  </style>
-</head>
-<body>
-  <div class='container'>
-    <h1 class='text-center mb-4'>Search results for &quot;${q}&quot;</h1>
-    <ul class='list-group'>
-`;
-    results.forEach(r => {
-      resultHtml += `
-      <li class='list-group-item'>
-        <a href='/proxy?url=${encodeURIComponent(r.href)}'>${r.title}</a>
-        <p class='mb-1'>${r.snippet}</p>
-      </li>
-`;
-    });
-      resultHtml += `
-    </ul>
-    <div class='mt-3'>
-      <a href='/search' class='btn btn-secondary'>New search</a>
-      <a href='/' class='btn btn-link'>Home</a>
-    </div>
-  </div>
-  <script src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js'></script>
-</body>
-</html>
-`;
-    res.set('content-type', 'text/html');
-    res.send(resultHtml);
-  } catch (error) {
-    console.error('Search error:', error.message);
-    res.status(500).send('Search error');
+    } catch (error) {
+      console.error('Search error:', error.message);
+      resultsHtml = `
+      <div class="mt-4 text-center alert alert-danger">
+        <p>Search error occurred. Please try again.</p>
+      </div>
+      `;
+    }
   }
-});
-
-// Root - simple form
-app.get('/', (req, res) => {
+  
+  // Send complete HTML response
   res.send(`
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cashback-Bot Proxy</title>
+    <title>${q ? `Search: ${q} - ` : ''}Cashback-Bot Proxy</title>
     <link href="https://bootswatch.com/5/cyborg/bootstrap.min.css" rel="stylesheet">
     <style>
       body { padding: 2rem; }
@@ -349,21 +315,25 @@ app.get('/', (req, res) => {
   <body>
     <div class="container">
       <h1 class="text-center mb-4">Cashback-Bot Proxy</h1>
-      <form class="input-group mb-3" id="smartForm">
-        <input type="text" class="form-control" id="smartInput" placeholder="Enter URL or search query" />
+      <form class="input-group mb-3" id="smartForm" action="/" method="get">
+        <input type="text" class="form-control" id="smartInput" name="q" placeholder="Enter URL or search query" value="${q || ''}" />
         <button class="btn btn-primary" type="submit">Go</button>
       </form>
+      
+      ${resultsHtml}
+      
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
       document.getElementById('smartForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const val = document.getElementById('smartInput').value.trim();
+        
         try {
           new URL(val);
           window.location.href = '/proxy?url=' + encodeURIComponent(val);
         } catch (_) {
-          window.location.href = '/search?q=' + encodeURIComponent(val);
+          window.location.href = '/?q=' + encodeURIComponent(val);
         }
       });
     </script>
