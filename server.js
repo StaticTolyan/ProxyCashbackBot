@@ -237,7 +237,7 @@ app.get('/search', async (req, res) => {
   <title>Proxy Search - Web Proxy</title>
   <link href='https://bootswatch.com/5/cyborg/bootstrap.min.css' rel='stylesheet'>
   <style>
-    body { padding: 2rem; background-color: #f8f9fa; }
+    body { padding: 2rem; }
     .container { max-width: 800px; }
   </style>
 </head>
@@ -295,7 +295,7 @@ app.get('/search', async (req, res) => {
   <title>Search results for &quot;${q}&quot; - Cashback-Bot Proxy</title>
   <link href='https://bootswatch.com/5/cyborg/bootstrap.min.css' rel='stylesheet'>
   <style>
-    body { padding: 2rem; background-color: #f8f9fa; }
+    body { padding: 2rem; }
     .container { max-width: 800px; }
   </style>
 </head>
@@ -342,7 +342,7 @@ app.get('/', (req, res) => {
     <title>Web Proxy</title>
     <link href="https://bootswatch.com/5/cyborg/bootstrap.min.css" rel="stylesheet">
     <style>
-      body { padding: 2rem; background-color: #f8f9fa; }
+      body { padding: 2rem; }
       .container { max-width: 800px; }
     </style>
   </head>
