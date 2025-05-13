@@ -24,32 +24,72 @@ function rewriteLinks(html, baseUrl) {
   // Inject proxying for dynamic fetch and XHR with CAPTCHA handling
   $('head').prepend(`<script>
     (function(){
+      // Enhanced CAPTCHA URL detection
       var isCaptchaUrl = function(url) {
         return (
           url.includes('recaptcha') || 
           url.includes('hcaptcha.com') || 
           url.includes('challenges.cloudflare.com') ||
-          url.includes('captcha')
+          url.includes('captcha') ||
+          url.includes('arkoselabs') ||
+          url.includes('funcaptcha')
         );
       };
       
+      // Special handling for CAPTCHA verification URLs
+      var isVerificationUrl = function(url) {
+        return (
+          url.includes('verify') ||
+          url.includes('siteverify') ||
+          url.includes('callback') ||
+          url.includes('api/v1') ||
+          url.includes('api2/anchor') ||
+          url.includes('enterprise/anchor')
+        );
+      };
+      
+      // Save original window.postMessage
+      var originalPostMessage = window.postMessage;
+      // Override postMessage to ensure CAPTCHA frames can communicate
+      window.postMessage = function(message, targetOrigin, transfer) {
+        // Allow all CAPTCHA-related postMessage calls
+        return originalPostMessage.apply(this, arguments);
+      };
+      
+      // Save original functions
       var originalFetch = window.fetch;
+      var originalOpen = XMLHttpRequest.prototype.open;
+      var originalSend = XMLHttpRequest.prototype.send;
+      
+      // Override fetch
       window.fetch = function(resource, init) {
         var url = (typeof resource === "string") ? resource : resource.url;
         
-        // Let CAPTCHA requests go through directly
-        if (isCaptchaUrl(url)) {
-          return originalFetch.call(this, resource, init);
+        // Special handling for CAPTCHA verification
+        if (isCaptchaUrl(url) || isVerificationUrl(url)) {
+          console.log("Direct fetch to CAPTCHA URL:", url);
+          return originalFetch.call(this, resource, init)
+            .then(function(response) {
+              // Store successful verification for debugging
+              if (url.includes('verify') || url.includes('siteverify')) {
+                console.log("CAPTCHA verification completed");
+              }
+              return response;
+            });
         }
         
         // Proxy other requests
         return originalFetch.call(this, "/proxy?url=" + encodeURIComponent(url), init);
       };
       
-      var originalOpen = XMLHttpRequest.prototype.open;
+      // Override XHR open
       XMLHttpRequest.prototype.open = function(method, url) {
+        // Store original URL for verification checks
+        this._originalUrl = url;
+        
         // Let CAPTCHA requests go through directly
-        if (isCaptchaUrl(url)) {
+        if (isCaptchaUrl(url) || isVerificationUrl(url)) {
+          console.log("Direct XHR to CAPTCHA URL:", url);
           return originalOpen.apply(this, arguments);
         }
         
@@ -57,6 +97,59 @@ function rewriteLinks(html, baseUrl) {
         arguments[1] = "/proxy?url=" + encodeURIComponent(url);
         return originalOpen.apply(this, arguments);
       };
+      
+      // Override XHR send to track verification responses
+      XMLHttpRequest.prototype.send = function(body) {
+        var xhr = this;
+        
+        // If this is a verification request, monitor its completion
+        if (xhr._originalUrl && (xhr._originalUrl.includes('verify') || xhr._originalUrl.includes('siteverify'))) {
+          var originalOnLoad = xhr.onload;
+          xhr.onload = function() {
+            console.log("CAPTCHA verification XHR completed");
+            if (originalOnLoad) originalOnLoad.apply(this, arguments);
+          };
+        }
+        
+        // Continue with original send
+        return originalSend.apply(this, arguments);
+      };
+      
+      // Hook into hCaptcha specific callbacks
+      window.addEventListener('DOMContentLoaded', function() {
+        // Check for hCaptcha scripts and setup callback handler
+        setTimeout(function() {
+          if (window.hcaptcha) {
+            console.log("hCaptcha detected, setting up hooks");
+            var originalRender = window.hcaptcha.render;
+            window.hcaptcha.render = function(container, params) {
+              // Ensure callback works
+              var originalCallback = params && params.callback;
+              if (originalCallback) {
+                params.callback = function(token) {
+                  console.log("hCaptcha verification successful", token.substring(0,10) + "...");
+                  // Trigger form submission after successful verification
+                  setTimeout(function() {
+                    if (originalCallback) originalCallback(token);
+                    // Find the form containing the hCaptcha element and submit it
+                    var containerEl = typeof container === 'string' ? document.getElementById(container) : container;
+                    if (containerEl) {
+                      var form = containerEl.closest('form');
+                      if (form) {
+                        console.log("Submitting form after hCaptcha verification");
+                        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                      }
+                    }
+                  }, 500);
+                };
+              }
+              return originalRender.apply(this, arguments);
+            };
+          }
+          
+          // Similar handling for other CAPTCHA types if needed
+        }, 1000);
+      });
     })();
   </script>`);
   // Preserve CAPTCHA scripts
@@ -233,7 +326,12 @@ app.get('/proxy', async (req, res) => {
     const isCaptchaUrl = targetUrl.includes('recaptcha') || 
                         targetUrl.includes('hcaptcha.com') || 
                         targetUrl.includes('challenges.cloudflare.com') ||
-                        targetUrl.includes('captcha');
+                        targetUrl.includes('captcha') ||
+                        targetUrl.includes('arkoselabs') ||
+                        targetUrl.includes('funcaptcha') ||
+                        targetUrl.includes('verify') ||
+                        targetUrl.includes('siteverify') ||
+                        targetUrl.includes('anchor');
     
     // Use a more complete desktop browser UA for CAPTCHA services
     const userAgent = isCaptchaUrl ? 
