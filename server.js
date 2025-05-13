@@ -24,7 +24,7 @@ function rewriteLinks(html, baseUrl) {
   // Inject proxying for dynamic fetch and XHR with CAPTCHA handling
   $('head').prepend(`<script>
     (function(){
-      // Enhanced CAPTCHA URL detection
+      // Enhanced CAPTCHA and protection service URL detection
       var isCaptchaUrl = function(url) {
         return (
           url.includes('recaptcha') || 
@@ -32,7 +32,16 @@ function rewriteLinks(html, baseUrl) {
           url.includes('challenges.cloudflare.com') ||
           url.includes('captcha') ||
           url.includes('arkoselabs') ||
-          url.includes('funcaptcha')
+          url.includes('funcaptcha') ||
+          url.includes('ddos-guard') ||
+          url.includes('shield.') ||
+          url.includes('check.') ||
+          url.includes('bot-protection') ||
+          url.includes('cf-') ||
+          url.includes('captcha-delivery') ||
+          url.includes('cf_chl_') ||
+          url.includes('kasada') ||
+          url.includes('challenge')
         );
       };
       
@@ -115,8 +124,90 @@ function rewriteLinks(html, baseUrl) {
         return originalSend.apply(this, arguments);
       };
       
-      // Hook into hCaptcha specific callbacks
+      // Hook into CAPTCHA and protection service callbacks
       window.addEventListener('DOMContentLoaded', function() {
+        // Helper for finding and clicking buttons
+        var tryClickButton = function(selectors) {
+          for (var i = 0; i < selectors.length; i++) {
+            var elements = document.querySelectorAll(selectors[i]);
+            for (var j = 0; j < elements.length; j++) {
+              try {
+                console.log('Attempting to click:', selectors[i]);
+                elements[j].click();
+                return true;
+              } catch (e) {
+                console.error('Click failed:', e);
+              }
+            }
+          }
+          return false;
+        };
+
+        // Handle DDoS-Guard and other protection services
+        var handleProtectionServices = function() {
+          // Common button selectors for various protection services
+          var buttonSelectors = [
+            '.ddos-guard-checkbox', // DDoS-Guard checkbox
+            '.btn-success', // Common success button
+            '#btn-primary', // Primary button
+            '.btn[type="submit"]', // Submit buttons
+            'button.g-recaptcha', // reCAPTCHA button
+            'button:not([disabled])', // Any non-disabled button
+            'input[type="submit"]:not([disabled])', // Any non-disabled submit
+            'input.g-recaptcha', // reCAPTCHA input
+            'a.btn-success', // Success link-button
+            '.button-wrapper button', // Buttons in wrappers
+            '.protection-button', // Protection buttons
+            '.proceed-button', // Proceed buttons
+            'button:contains("Continue")', // Continue buttons
+            'button:contains("Proceed")', // Proceed buttons
+            'button:contains("Verify")', // Verify buttons
+            '#challenge-stage button', // Challenge stage buttons
+            '#challenge-form button' // Challenge form buttons
+          ];
+          
+          // Try clicking appropriate buttons
+          if (tryClickButton(buttonSelectors)) {
+            console.log('Protection service button clicked!');
+          }
+          
+          // Handle checkbox-based verification
+          var checkboxes = document.querySelectorAll('input[type="checkbox"]');
+          for (var i = 0; i < checkboxes.length; i++) {
+            try {
+              if (!checkboxes[i].checked) {
+                console.log('Checking checkbox for verification');
+                checkboxes[i].checked = true;
+                checkboxes[i].dispatchEvent(new Event('change', { bubbles: true }));
+                checkboxes[i].dispatchEvent(new Event('click', { bubbles: true }));
+              }
+            } catch (e) {
+              console.error('Checkbox interaction failed:', e);
+            }
+          }
+
+          // Try to find and submit forms
+          var forms = document.querySelectorAll('form');
+          for (var i = 0; i < forms.length; i++) {
+            // Skip search forms and other common non-verification forms
+            if (forms[i].id === 'search-form' || forms[i].className.includes('search') || forms[i].action.includes('search')) {
+              continue;
+            }
+            
+            try {
+              console.log('Attempting to submit protection form');
+              forms[i].dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            } catch (e) {
+              console.error('Form submission failed:', e);
+            }
+          }
+        };
+        
+        // Run protection service handler after a short delay
+        setTimeout(handleProtectionServices, 1500);
+        // And also run it periodically in case new elements appear
+        setInterval(handleProtectionServices, 5000);
+
         // Check for hCaptcha scripts and setup callback handler
         setTimeout(function() {
           if (window.hcaptcha) {
@@ -147,39 +238,237 @@ function rewriteLinks(html, baseUrl) {
             };
           }
           
-          // Similar handling for other CAPTCHA types if needed
+          // Handle reCAPTCHA if present
+          if (window.grecaptcha) {
+            console.log("reCAPTCHA detected, setting up hooks");
+            if (window.grecaptcha.enterprise) {
+              var originalEnterpriseRender = window.grecaptcha.enterprise.render;
+              window.grecaptcha.enterprise.render = function(container, params) {
+                // Add callback handling similar to hCaptcha
+                if (params && params.callback) {
+                  var originalCallback = params.callback;
+                  params.callback = function(token) {
+                    console.log("reCAPTCHA enterprise verification successful");
+                    if (originalCallback) originalCallback(token);
+                    setTimeout(handleProtectionServices, 1000);
+                  };
+                }
+                return originalEnterpriseRender.apply(this, arguments);
+              };
+            } else {
+              var originalRecaptchaRender = window.grecaptcha.render;
+              window.grecaptcha.render = function(container, params) {
+                if (params && params.callback) {
+                  var originalCallback = params.callback;
+                  params.callback = function(token) {
+                    console.log("reCAPTCHA verification successful");
+                    if (originalCallback) originalCallback(token);
+                    setTimeout(handleProtectionServices, 1000);
+                  };
+                }
+                return originalRecaptchaRender.apply(this, arguments);
+              };
+            }
+          }
         }, 1000);
+
+        // Monitor DOM changes to detect new protection elements
+        if (window.MutationObserver) {
+          var observer = new MutationObserver(function(mutations) {
+            var shouldCheck = false;
+            
+            mutations.forEach(function(mutation) {
+              // Check for added nodes that might be protection-related
+              if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+                for (var i = 0; i < mutation.addedNodes.length; i++) {
+                  var node = mutation.addedNodes[i];
+                  if (node.nodeType === 1) { // Element node
+                    if (
+                      node.id && (
+                        node.id.includes('captcha') || 
+                        node.id.includes('challenge') || 
+                        node.id.includes('protection') ||
+                        node.id.includes('guard')
+                      ) ||
+                      node.className && (
+                        node.className.includes('captcha') ||
+                        node.className.includes('challenge') ||
+                        node.className.includes('protection') ||
+                        node.className.includes('guard')
+                      )
+                    ) {
+                      shouldCheck = true;
+                      break;
+                    }
+                  }
+                }
+              }
+            });
+            
+            if (shouldCheck) {
+              setTimeout(handleProtectionServices, 500);
+            }
+          });
+          
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+        }
       });
     })();
   </script>`);
-  // Preserve CAPTCHA scripts
+  // Preserve CAPTCHA and protection scripts
   $('script').each((_, el) => {
     const $script = $(el);
     const src = $script.attr('src');
+    const html = $script.html();
     
-    // Don't modify inline scripts for CAPTCHAs or scripts that load CAPTCHAs
-    if ($script.html() && (
-        $script.html().includes('recaptcha') || 
-        $script.html().includes('hcaptcha') || 
-        $script.html().includes('captcha') ||
-        $script.html().includes('challenges.cloudflare')
+    // Don't modify inline scripts for CAPTCHAs or protection services
+    if (html && (
+        html.includes('recaptcha') || 
+        html.includes('hcaptcha') || 
+        html.includes('captcha') ||
+        html.includes('challenges.cloudflare') ||
+        html.includes('ddos-guard') ||
+        html.includes('challenge') ||
+        html.includes('cf.') ||
+        html.includes('security') ||
+        html.includes('bot') ||
+        html.includes('protection') ||
+        html.includes('shield') ||
+        html.includes('guard') ||
+        html.includes('kasada')
       )) {
       // Mark this script to be preserved
-      $script.attr('data-preserve-captcha', 'true');
+      $script.attr('data-preserve-protection', 'true');
     }
     
-    // Don't modify script src for CAPTCHA services
+    // Don't modify script src for CAPTCHA and protection services
     if (src && (
         src.includes('recaptcha') || 
         src.includes('hcaptcha.com') || 
         src.includes('challenges.cloudflare.com') ||
-        src.includes('captcha')
+        src.includes('captcha') ||
+        src.includes('ddos-guard') ||
+        src.includes('shield.') ||
+        src.includes('challenge') ||
+        src.includes('cf.') ||
+        src.includes('security') ||
+        src.includes('cloudflare') ||
+        src.includes('bot-protection') ||
+        src.includes('captcha-delivery') ||
+        src.includes('kasada')
       )) {
       // Keep the original src
       $script.attr('data-original-src', src);
       $script.removeAttr('src'); // Will be restored later
     }
   });
+  
+  // Add helper script for browser fingerprinting
+  $('head').append(`<script>
+    // Override some browser fingerprinting methods to appear more like a real browser
+    (function() {
+      // Navigator properties that are commonly checked
+      try {
+        const pluginsLength = Math.floor(Math.random() * 3) + 3; // Random between 3-5 plugins
+        Object.defineProperty(navigator, 'plugins', {
+          get: function() {
+            return { length: pluginsLength };
+          }
+        });
+        
+        // Make webdriver property not detectable
+        Object.defineProperty(navigator, 'webdriver', {
+          get: function() { return false; }
+        });
+        
+        // Add dummy language preferences
+        Object.defineProperty(navigator, 'languages', {
+          get: function() { return ['en-US', 'en', 'es']; }
+        });
+      } catch (e) {
+        console.error('Error overriding navigator properties:', e);
+      }
+
+      // Some protection services check if certain functions are native
+      try {
+        const nativeToString = Function.prototype.toString;
+        Function.prototype.toString = function() {
+          if (this === Function.prototype.toString) {
+            return nativeToString.call(nativeToString);
+          }
+          // Make all functions appear native
+          if (this.name === 'detect' || 
+              this.name.includes('check') || 
+              this.name.includes('bot') || 
+              this.name.includes('protection')) {
+            return 'function ' + this.name + '() { [native code] }';
+          }
+          return nativeToString.call(this);
+        };
+      } catch (e) {
+        console.error('Error overriding Function.prototype.toString:', e);
+      }
+      
+      // Simulate proper mouse movements for bot detection
+      if (!window._mouseMovementSimulated) {
+        window._mouseMovementSimulated = true;
+        
+        // Create random mouse movements to appear human
+        const simulateMouseMovement = function() {
+          const events = [];
+          const numMovements = 5 + Math.floor(Math.random() * 10);
+          
+          // Create random start position
+          let x = Math.floor(Math.random() * window.innerWidth);
+          let y = Math.floor(Math.random() * window.innerHeight);
+          
+          // Generate random smooth movement path
+          for (let i = 0; i < numMovements; i++) {
+            // Target position with some randomness
+            const targetX = Math.floor(Math.random() * window.innerWidth);
+            const targetY = Math.floor(Math.random() * window.innerHeight);
+            
+            // Number of steps to reach target (for smooth movement)
+            const steps = 5 + Math.floor(Math.random() * 10);
+            
+            // Calculate increments
+            const incX = (targetX - x) / steps;
+            const incY = (targetY - y) / steps;
+            
+            // Create movement steps
+            for (let step = 0; step < steps; step++) {
+              // Add slight randomness to each step
+              x += incX + (Math.random() * 2 - 1);
+              y += incY + (Math.random() * 2 - 1);
+              
+              events.push({ type: 'mousemove', x: Math.round(x), y: Math.round(y), when: step * 50 });
+            }
+          }
+          
+          // Dispatch events with realistic timing
+          events.forEach(function(event) {
+            setTimeout(function() {
+              const mouseEvent = new MouseEvent(event.type, {
+                view: window,
+                bubbles: true,
+                cancelable: true,
+                clientX: event.x,
+                clientY: event.y
+              });
+              document.dispatchEvent(mouseEvent);
+            }, event.when);
+          });
+        };
+        
+        // Run initial simulation and then periodically
+        setTimeout(simulateMouseMovement, 1000);
+        setInterval(simulateMouseMovement, 30000); // Every 30 seconds
+      }
+    })();
+  </script>`);
   
   // Rewrite inline <style> tags
   $('style').each((_, el) => {
@@ -322,7 +611,7 @@ app.get('/proxy', async (req, res) => {
   }
   try {
     // Build axios options, mimic browser, and accept up to 4xx status for proxying
-    // Check if the URL is for a CAPTCHA service
+    // Check if the URL is for a CAPTCHA or protection service
     const isCaptchaUrl = targetUrl.includes('recaptcha') || 
                         targetUrl.includes('hcaptcha.com') || 
                         targetUrl.includes('challenges.cloudflare.com') ||
@@ -331,7 +620,16 @@ app.get('/proxy', async (req, res) => {
                         targetUrl.includes('funcaptcha') ||
                         targetUrl.includes('verify') ||
                         targetUrl.includes('siteverify') ||
-                        targetUrl.includes('anchor');
+                        targetUrl.includes('anchor') ||
+                        targetUrl.includes('ddos-guard') ||
+                        targetUrl.includes('shield.') ||
+                        targetUrl.includes('check.') ||
+                        targetUrl.includes('bot-protection') ||
+                        targetUrl.includes('challenge') ||
+                        targetUrl.includes('cf-') ||
+                        targetUrl.includes('captcha-delivery') ||
+                        targetUrl.includes('cf_chl_') ||
+                        targetUrl.includes('kasada');
     
     // Use a more complete desktop browser UA for CAPTCHA services
     const userAgent = isCaptchaUrl ? 
@@ -349,10 +647,30 @@ app.get('/proxy', async (req, res) => {
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-Dest': 'document',
         'Sec-GPC': '1',
-        'Upgrade-Insecure-Requests': '1'
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0',
+        'Connection': 'keep-alive',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Pragma': 'no-cache',
+        // Add more realistic browser header
+        'sec-ch-ua': '"Google Chrome";v="113", "Chromium";v="113", "Not-A.Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"'
       },
+      // Enable cookies for protection services
+      withCredentials: true,
+      // Enable gzip/deflate decompression
+      decompress: true,
+      // Support redirects
+      maxRedirects: 5,
       httpsAgent: new https.Agent({ rejectUnauthorized: false })
     };
+    
+    // Use cookies from previous requests if available
+    if (req.session && req.session.cookies && req.session.cookies[targetUrl]) {
+      axiosOpts.headers.Cookie = req.session.cookies[targetUrl];
+    }
     
     // Add Referer for CAPTCHA requests to help with verification
     if (isCaptchaUrl && req.headers.referer) {
