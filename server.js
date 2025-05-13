@@ -4,26 +4,20 @@ const cheerio = require('cheerio');
 const https = require('https');
 const iconv = require('iconv-lite');
 const { URL } = require('url');
-const session = require('express-session');
-const cookieParser = require('cookie-parser');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Add cookie and session support
-app.use(cookieParser());
-app.use(session({
-  secret: 'proxy-cashback-bot-secret-key',
-  resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false }
-}));
 
 const CASHBACK_DOMAIN = 'https://cashback-bot.com';
 const CASHBACK_API_DOMAIN = 'https://cashback-bot.com/v1';
 
 // Helper to modify HTML links
 function rewriteLinks(html, baseUrl) {
+  // Bypass proxy modifications for protection challenge pages
+  const lower = html.toLowerCase();
+  if (lower.includes('checking your browser') || lower.includes('ddos-guard') || lower.includes('cf-chl') || lower.includes('cloudflare')) {
+    return html;
+  }
   const $ = cheerio.load(html);
   // Remove <base> tags so original domain doesn’t override proxy links
   $('base').remove();
@@ -115,7 +109,8 @@ function rewriteLinks(html, baseUrl) {
         
         // Proxy other requests
         arguments[1] = "/proxy?url=" + encodeURIComponent(url);
-        var originalSend = XMLHttpRequest.prototype.send;
+        return originalOpen.apply(this, arguments);
+      };
       
       // Override XHR send to track verification responses
       XMLHttpRequest.prototype.send = function(body) {
@@ -126,46 +121,6 @@ function rewriteLinks(html, baseUrl) {
           var originalOnLoad = xhr.onload;
           xhr.onload = function() {
             console.log("CAPTCHA verification XHR completed");
-            
-            // For DDoS-Guard specifically, try to handle the response
-            if (xhr._originalUrl.includes('ddos') || 
-                xhr._originalUrl.includes('guard') || 
-                xhr._originalUrl.includes('captcha') || 
-                document.title.includes('DDoS')) {
-              console.log('DDoS-Guard verification completed, checking response');
-              
-              try {
-                // Try to parse the response if it's JSON
-                var responseData = JSON.parse(xhr.responseText);
-                console.log('Verification response:', responseData);
-                
-                // If we have a success or token field, try to handle it
-                if (responseData.success || responseData.token || responseData.pass) {
-                  console.log('Verification successful, attempting page navigation');
-                  
-                  // Try to submit forms or click continue buttons
-                  setTimeout(function() {
-                    // Submit any forms with captcha fields
-                    document.querySelectorAll('form input[name^="h-captcha"], form input[name^="g-recaptcha"], form input[name="captcha"]').forEach(function(input) {
-                      var form = input.closest('form');
-                      if (form) {
-                        console.log('Submitting form after verification');
-                        form.submit();
-                      }
-                    });
-                    
-                    // Click any visible submit buttons
-                    document.querySelectorAll('button[type="submit"], input[type="submit"], button.submit-button, button.continue, button.proceed').forEach(function(button) {
-                      console.log('Clicking submit button after verification');
-                      button.click();
-                    });
-                  }, 500);
-                }
-              } catch (e) {
-                console.error('Error handling verification response:', e);
-              }
-            }
-            
             if (originalOnLoad) originalOnLoad.apply(this, arguments);
           };
         }
@@ -195,91 +150,9 @@ function rewriteLinks(html, baseUrl) {
 
         // Handle DDoS-Guard and other protection services
         var handleProtectionServices = function() {
-          console.log('Handling protection services...');
-          
-          // Check for DDoS-Guard specifically (the one in the screenshot)
-          var isDDoSGuard = document.title.includes('DDoS-Guard') || 
-                            document.body.textContent.includes('Checking your browser') ||
-                            document.body.textContent.includes('bot request');
-                            
-          if (isDDoSGuard) {
-            console.log('DDoS-Guard detected, attempting specialized handling');
-            
-            // Look for hCaptcha iframe and interact with it
-            var captchaIframes = document.querySelectorAll('iframe[src*="hcaptcha"], iframe[src*="captcha"], iframe[data-hcaptcha-widget-id]');
-            if (captchaIframes.length > 0) {
-              console.log('Found hCaptcha iframe:', captchaIframes.length);
-              
-              // Try to make hCaptcha iframe more accessible
-              captchaIframes.forEach(function(iframe) {
-                try {
-                  // Set iframe styles to make it more visible
-                  iframe.style.opacity = '1';
-                  iframe.style.pointerEvents = 'auto';
-                  iframe.style.display = 'block';
-                  iframe.style.visibility = 'visible';
-                  iframe.style.zIndex = '9999';
-                  
-                  // Attempt to focus the iframe
-                  iframe.focus();
-                  console.log('Focused hCaptcha iframe');
-                } catch (e) {
-                  console.error('Error focusing iframe:', e);
-                }
-              });
-            }
-
-            // Handle DDoS-Guard specific buttons and checkboxes
-            setTimeout(function() {
-              // Try clicking specifically on DDoS-Guard elements
-              var ddosElements = document.querySelectorAll('.ddos-guard-captcha, .ddos-guard-checkbox, .challenge-form button, input[type="checkbox"]');
-              ddosElements.forEach(function(el) {
-                try {
-                  console.log('Clicking DDoS-Guard element:', el.tagName);
-                  el.click();
-                } catch (e) {
-                  console.error('Error clicking element:', e);
-                }
-              });
-              
-              // Try to check all checkboxes (common in DDoS-Guard)
-              var checkboxes = document.querySelectorAll('input[type="checkbox"]');
-              checkboxes.forEach(function(checkbox) {
-                try {
-                  if (!checkbox.checked) {
-                    checkbox.checked = true;
-                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-                    checkbox.dispatchEvent(new Event('click', { bubbles: true }));
-                    console.log('Checked a checkbox');
-                  }
-                } catch (e) {
-                  console.error('Error with checkbox:', e);
-                }
-              });
-              
-              // Find and submit the form if present
-              var forms = document.querySelectorAll('form');
-              forms.forEach(function(form) {
-                try {
-                  console.log('Submitting DDoS-Guard form');
-                  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                } catch (e) {
-                  console.error('Form submission error:', e);
-                }
-              });
-            }, 2000);
-          }
-          
           // Common button selectors for various protection services
           var buttonSelectors = [
             '.ddos-guard-checkbox', // DDoS-Guard checkbox
-            '.h-captcha-checkbox', // hCaptcha checkbox
-            '.h-captcha', // hCaptcha elements
-            '.h-captcha-response-button', // hCaptcha response button
-            '.captcha-solver', // Generic captcha solver
-            '.captcha-checkbox', // Common captcha checkbox
-            '#checkbox', // Common checkbox id
-            '.checkbox', // Common checkbox class
             '.btn-success', // Common success button
             '#btn-primary', // Primary button
             '.btn[type="submit"]', // Submit buttons
@@ -295,9 +168,7 @@ function rewriteLinks(html, baseUrl) {
             'button:contains("Proceed")', // Proceed buttons
             'button:contains("Verify")', // Verify buttons
             '#challenge-stage button', // Challenge stage buttons
-            '#challenge-form button', // Challenge form buttons
-            'button', // Any button as last resort
-            'input[type="submit"]' // Any submit as last resort
+            '#challenge-form button' // Challenge form buttons
           ];
           
           // Try clicking appropriate buttons
@@ -341,63 +212,6 @@ function rewriteLinks(html, baseUrl) {
         setTimeout(handleProtectionServices, 1500);
         // And also run it periodically in case new elements appear
         setInterval(handleProtectionServices, 5000);
-        
-        // Specifically handle hCaptcha in DDoS-Guard context
-        window.addEventListener('load', function() {
-          console.log('Window loaded, looking for captchas');
-          
-          // Wait a bit for dynamic content
-          setTimeout(function() {
-            // Direct attempt to handle hCaptcha in DDoS-Guard
-            if (document.title.includes('DDoS-Guard') || document.body.textContent.includes('bot request')) {
-              console.log('DDoS-Guard detected on page load');
-              
-              // Find and click all checkboxes (common first step)
-              document.querySelectorAll('input[type="checkbox"]').forEach(function(checkbox) {
-                try {
-                  console.log('Found checkbox, clicking it');
-                  checkbox.click();
-                } catch (e) {}
-              });
-              
-              // Check if we have hCaptcha
-              if (window.hcaptcha) {
-                console.log('hCaptcha found in DDoS-Guard context');
-                try {
-                  // Attempt to execute hCaptcha
-                  var captchaContainers = document.querySelectorAll('[data-sitekey], [data-hcaptcha-sitekey], .h-captcha');
-                  captchaContainers.forEach(function(container) {
-                    console.log('Found hCaptcha container, rendering');
-                    // Render if not already rendered
-                    var widgetId = container.getAttribute('data-hcaptcha-widget-id');
-                    if (!widgetId && window.hcaptcha && window.hcaptcha.render) {
-                      var sitekey = container.getAttribute('data-sitekey') || container.getAttribute('data-hcaptcha-sitekey');
-                      if (sitekey) {
-                        console.log('Rendering hCaptcha with sitekey:', sitekey);
-                        window.hcaptcha.render(container, {
-                          sitekey: sitekey,
-                          callback: function(token) {
-                            console.log('hCaptcha solved in DDoS-Guard context');
-                            // Submit the form after solving
-                            setTimeout(function() {
-                              var form = container.closest('form');
-                              if (form) {
-                                form.submit();
-                                console.log('Form submitted after hCaptcha');
-                              }
-                            }, 500);
-                          }
-                        });
-                      }
-                    }
-                  });
-                } catch (e) {
-                  console.error('Error handling hCaptcha:', e);
-                }
-              }
-            }
-          }, 2000);
-        });
 
         // Check for hCaptcha scripts and setup callback handler
         setTimeout(function() {
@@ -405,33 +219,7 @@ function rewriteLinks(html, baseUrl) {
             console.log("hCaptcha detected, setting up hooks");
             var originalRender = window.hcaptcha.render;
             window.hcaptcha.render = function(container, params) {
-              console.log('hCaptcha render called with params:', JSON.stringify(params));
-              
-              // Handle DDoS-Guard specific case
-              var isDDoSGuard = document.title.includes('DDoS-Guard') || 
-                                document.body.textContent.includes('Checking your browser') ||
-                                document.body.textContent.includes('bot request');
-                                
-              if (isDDoSGuard) {
-                console.log('Enhancing hCaptcha for DDoS-Guard');
-                // Make sure we have a callback for DDoS-Guard
-                if (!params) params = {};
-                if (!params.callback) {
-                  params.callback = function(token) {
-                    console.log('DDoS-Guard hCaptcha verification successful:', token.substring(0,10) + '...');
-                    // Try to submit the form or click buttons after verification
-                    setTimeout(function() {
-                      // Find all forms and try to submit them
-                      document.querySelectorAll('form').forEach(function(form) {
-                        console.log('Submitting form after DDoS-Guard verification');
-                        try { form.submit(); } catch(e) { console.error(e); }
-                      });
-                    }, 1000);
-                  };
-                }
-              }
-              
-              // Ensure callback works for all hCaptcha instances
+              // Ensure callback works
               var originalCallback = params && params.callback;
               if (originalCallback) {
                 params.callback = function(token) {
@@ -439,30 +227,20 @@ function rewriteLinks(html, baseUrl) {
                   // Trigger form submission after successful verification
                   setTimeout(function() {
                     if (originalCallback) originalCallback(token);
-                    // Find the form containing the hCaptcha element and submit it using direct submit
+                    // Find the form containing the hCaptcha element and submit it
                     var containerEl = typeof container === 'string' ? document.getElementById(container) : container;
                     if (containerEl) {
                       var form = containerEl.closest('form');
                       if (form) {
                         console.log("Submitting form after hCaptcha verification");
-                        try {
-                          // Try both submit methods
-                          form.submit();
-                          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                        } catch(e) { console.error(e); }
+                        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
                       }
-                    }
-                    
-                    // If we're in DDoS-Guard context, try to find and click buttons too
-                    if (isDDoSGuard) {
-                      document.querySelectorAll('button, input[type="submit"]').forEach(function(btn) {
-                        try { btn.click(); } catch(e) {}
-                      });
                     }
                   }, 500);
                 };
               }
               return originalRender.apply(this, arguments);
+            };
           }
           
           // Handle reCAPTCHA if present
@@ -837,17 +615,6 @@ app.get('/proxy', async (req, res) => {
     console.error('Cashback check error:', err.message);
   }
   try {
-    // For DDoS-Guard issues, make sure we have a proper session
-    if (!req.session.ddosAttempts) {
-      req.session.ddosAttempts = {};
-    }
-    
-    // Track attempts to access this URL (for DDoS-Guard retry logic)
-    const urlKey = targetUrl.replace(/https?:\/\//, '').split('/')[0]; // Just get the domain part
-    if (!req.session.ddosAttempts[urlKey]) {
-      req.session.ddosAttempts[urlKey] = { count: 0, timestamp: Date.now() };
-    }
-    
     // Build axios options, mimic browser, and accept up to 4xx status for proxying
     // Check if the URL is for a CAPTCHA or protection service
     const isCaptchaUrl = targetUrl.includes('recaptcha') || 
@@ -941,63 +708,6 @@ app.get('/proxy', async (req, res) => {
         if (metaMatch) charset = metaMatch[1].toLowerCase();
       }
       const html = iconv.decode(buffer, charset);
-      
-      // Check if this is a DDoS-Guard page
-      const isDDoSGuardPage = html.includes('DDoS-Guard') ||
-                            html.includes('Checking your browser before accessing') ||
-                            html.includes('Sorry, but this looks too much like a bot request');
-      
-      // If it's a DDoS-Guard page, increment our counter and inject special helper
-      if (isDDoSGuardPage) {
-        console.log('DDoS-Guard protection detected for URL:', targetUrl);
-        
-        // Track this attempt
-        req.session.ddosAttempts[urlKey].count++;
-        req.session.ddosAttempts[urlKey].timestamp = Date.now();
-        
-        // Read our special DDoS-Guard helper script
-        const fs = require('fs');
-        const ddosHelperPath = __dirname + '/ddos-guard-helper.js';
-        let ddosHelper = '';
-        
-        try {
-          ddosHelper = fs.readFileSync(ddosHelperPath, 'utf8');
-        } catch (err) {
-          console.error('Error reading DDoS-Guard helper script:', err);
-        }
-        
-        // Create a special enhanced version of the HTML with our helper
-        const $ = cheerio.load(html);
-        
-        // Add our DDoS-Guard helper script to make CAPTCHA verification work better
-        $('head').append(`<script>${ddosHelper}</script>`);
-        
-        // Make the CAPTCHA more visible and interactive
-        $('style').append(`
-          iframe[src*="hcaptcha"], iframe[src*="captcha"], iframe[data-hcaptcha-widget-id] {
-            opacity: 1 !important;
-            visibility: visible !important;
-            display: block !important;
-            pointer-events: auto !important;
-            z-index: 999999 !important;
-            position: relative !important;
-            transform: none !important;
-          }
-          input[type="checkbox"] {
-            opacity: 1 !important;
-            visibility: visible !important;
-            display: block !important;
-            pointer-events: auto !important;
-          }
-        `);
-        
-        // Process the HTML with our standard rewriter
-        const modifiedHtml = rewriteLinks($.html(), targetUrl);
-        res.set('content-type', contentType);
-        return res.send(modifiedHtml);
-      }
-      
-      // Standard processing for non-DDoS-Guard pages
       const modifiedHtml = rewriteLinks(html, targetUrl);
       res.set('content-type', contentType);
       return res.send(modifiedHtml);
