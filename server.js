@@ -3,6 +3,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const https = require('https');
 const iconv = require('iconv-lite');
+const { URL } = require('url');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,8 +21,73 @@ function rewriteLinks(html, baseUrl) {
   // Ensure mobile viewport is present
   $('meta[name="viewport"]').remove();
   $('head').prepend('<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">');
-  // Inject proxying for dynamic fetch and XHR
-  $('head').prepend('<script>(function(){var f=window.fetch;window.fetch=function(i,n){var u=(typeof i=="string"?i:i.url);return f.call(this,"/proxy?url="+encodeURIComponent(u),n)};var o=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){arguments[1]="/proxy?url="+encodeURIComponent(u);return o.apply(this,arguments)};})();</script>');
+  // Inject proxying for dynamic fetch and XHR with CAPTCHA handling
+  $('head').prepend(`<script>
+    (function(){
+      var isCaptchaUrl = function(url) {
+        return (
+          url.includes('recaptcha') || 
+          url.includes('hcaptcha.com') || 
+          url.includes('challenges.cloudflare.com') ||
+          url.includes('captcha')
+        );
+      };
+      
+      var originalFetch = window.fetch;
+      window.fetch = function(resource, init) {
+        var url = (typeof resource === "string") ? resource : resource.url;
+        
+        // Let CAPTCHA requests go through directly
+        if (isCaptchaUrl(url)) {
+          return originalFetch.call(this, resource, init);
+        }
+        
+        // Proxy other requests
+        return originalFetch.call(this, "/proxy?url=" + encodeURIComponent(url), init);
+      };
+      
+      var originalOpen = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function(method, url) {
+        // Let CAPTCHA requests go through directly
+        if (isCaptchaUrl(url)) {
+          return originalOpen.apply(this, arguments);
+        }
+        
+        // Proxy other requests
+        arguments[1] = "/proxy?url=" + encodeURIComponent(url);
+        return originalOpen.apply(this, arguments);
+      };
+    })();
+  </script>`);
+  // Preserve CAPTCHA scripts
+  $('script').each((_, el) => {
+    const $script = $(el);
+    const src = $script.attr('src');
+    
+    // Don't modify inline scripts for CAPTCHAs or scripts that load CAPTCHAs
+    if ($script.html() && (
+        $script.html().includes('recaptcha') || 
+        $script.html().includes('hcaptcha') || 
+        $script.html().includes('captcha') ||
+        $script.html().includes('challenges.cloudflare')
+      )) {
+      // Mark this script to be preserved
+      $script.attr('data-preserve-captcha', 'true');
+    }
+    
+    // Don't modify script src for CAPTCHA services
+    if (src && (
+        src.includes('recaptcha') || 
+        src.includes('hcaptcha.com') || 
+        src.includes('challenges.cloudflare.com') ||
+        src.includes('captcha')
+      )) {
+      // Keep the original src
+      $script.attr('data-original-src', src);
+      $script.removeAttr('src'); // Will be restored later
+    }
+  });
+  
   // Rewrite inline <style> tags
   $('style').each((_, el) => {
     let css = $(el).html();
@@ -71,7 +137,7 @@ function rewriteLinks(html, baseUrl) {
     { selector: 'video[src]', attr: 'src' },
     { selector: 'audio[src]', attr: 'src' },
     { selector: 'source[src]', attr: 'src' },
-    { selector: 'script[src]', attr: 'src' },
+    { selector: 'script[src]:not([data-original-src])', attr: 'src' },  // Skip already processed CAPTCHA scripts
     { selector: 'link[href]', attr: 'href' },
     { selector: 'iframe[src]', attr: 'src' }
   ];
@@ -101,6 +167,13 @@ function rewriteLinks(html, baseUrl) {
       $(el).attr(attr, proxyUrl);
     });
   });
+  // Restore CAPTCHA script sources
+  $('script[data-original-src]').each((_, el) => {
+    const $script = $(el);
+    $script.attr('src', $script.attr('data-original-src'));
+    $script.removeAttr('data-original-src');
+  });
+  
   return $.html();
 }
 
@@ -156,16 +229,48 @@ app.get('/proxy', async (req, res) => {
   }
   try {
     // Build axios options, mimic browser, and accept up to 4xx status for proxying
+    // Check if the URL is for a CAPTCHA service
+    const isCaptchaUrl = targetUrl.includes('recaptcha') || 
+                        targetUrl.includes('hcaptcha.com') || 
+                        targetUrl.includes('challenges.cloudflare.com') ||
+                        targetUrl.includes('captcha');
+    
+    // Use a more complete desktop browser UA for CAPTCHA services
+    const userAgent = isCaptchaUrl ? 
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' :
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1';
+    
     const axiosOpts = {
       responseType: 'arraybuffer',
       validateStatus: status => status < 500,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
+        'User-Agent': userAgent,
         'Accept-Language': 'en-US,en;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Sec-Fetch-Site': 'cross-site',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-GPC': '1',
+        'Upgrade-Insecure-Requests': '1'
       },
       httpsAgent: new https.Agent({ rejectUnauthorized: false })
     };
+    
+    // Add Referer for CAPTCHA requests to help with verification
+    if (isCaptchaUrl && req.headers.referer) {
+      axiosOpts.headers['Referer'] = req.headers.referer;
+    } else if (req.headers.referer) {
+      // Try to parse the referer to see if it's a proxy request
+      try {
+        const refererUrl = new URL(req.headers.referer);
+        const urlParam = refererUrl.searchParams.get('url');
+        if (urlParam) {
+          axiosOpts.headers['Referer'] = urlParam;
+        }
+      } catch (e) {
+        // Invalid referer, ignore
+      }
+    }
     const response = await axios.get(targetUrl, axiosOpts);
     const contentType = (response.headers['content-type'] || '').toLowerCase();
 
