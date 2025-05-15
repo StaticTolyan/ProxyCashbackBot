@@ -34,11 +34,13 @@ function rewriteLinks(html, baseUrl) {
         return (
           url.includes('recaptcha') || 
           url.includes('hcaptcha.com') || 
+          url.includes('h-captcha') ||
           url.includes('challenges.cloudflare.com') ||
           url.includes('captcha') ||
           url.includes('arkoselabs') ||
           url.includes('funcaptcha') ||
           url.includes('ddos-guard') ||
+          url.includes('.well-known/ddos-guard') ||
           url.includes('shield.') ||
           url.includes('check.') ||
           url.includes('bot-protection') ||
@@ -524,8 +526,8 @@ function rewriteLinks(html, baseUrl) {
     { selector: 'video[src]', attr: 'src' },
     { selector: 'audio[src]', attr: 'src' },
     { selector: 'source[src]', attr: 'src' },
-    { selector: 'script[src]:not([data-original-src])', attr: 'src' },  // Skip already processed CAPTCHA scripts
-    { selector: 'link[href]', attr: 'href' },
+    { selector: 'script[src]:not([data-original-src]):not([src*="hcaptcha.com"]):not([src*="h-captcha"]):not([src*="ddos-guard"])', attr: 'src' },  
+    { selector: 'link[href]:not([href*="hcaptcha.com"]):not([href*="h-captcha"]):not([href*="ddos-guard"])', attr: 'href' },  
     { selector: 'iframe[src]', attr: 'src' }
   ];
   elements.forEach(({ selector, attr }) => {
@@ -619,6 +621,7 @@ app.get('/proxy', async (req, res) => {
     // Check if the URL is for a CAPTCHA or protection service
     const isCaptchaUrl = targetUrl.includes('recaptcha') || 
                         targetUrl.includes('hcaptcha.com') || 
+                        targetUrl.includes('h-captcha') ||
                         targetUrl.includes('challenges.cloudflare.com') ||
                         targetUrl.includes('captcha') ||
                         targetUrl.includes('arkoselabs') ||
@@ -627,6 +630,7 @@ app.get('/proxy', async (req, res) => {
                         targetUrl.includes('siteverify') ||
                         targetUrl.includes('anchor') ||
                         targetUrl.includes('ddos-guard') ||
+                        targetUrl.includes('.well-known/ddos-guard') ||
                         targetUrl.includes('shield.') ||
                         targetUrl.includes('check.') ||
                         targetUrl.includes('bot-protection') ||
