@@ -15,7 +15,7 @@ const CASHBACK_API_DOMAIN = 'https://cashback-bot.com/v1';
 function rewriteLinks(html, baseUrl) {
   // Bypass proxy modifications for protection challenge pages
   const lower = html.toLowerCase();
-  if (lower.includes('checking your browser') || lower.includes('ddos-guard') || lower.includes('cf-chl') || lower.includes('cloudflare')) {
+  if (lower.includes('checking your browser') || lower.includes('cf-chl') || lower.includes('cloudflare')) {
     return html;
   }
   const $ = cheerio.load(html);
