@@ -10,6 +10,11 @@ const PORT = process.env.PORT || 3000;
 const CASHBACK_DOMAIN = 'https://cashback-bot.com';
 const CASHBACK_API_DOMAIN = 'https://cashback-bot.com/v1';
 
+// Detect captcha and DDOS-Guard URLs to bypass rewriting and proxy adjustments
+function isCaptchaUrl(url) {
+  return url.includes('h-captcha') || url.includes('hcaptcha') || url.includes('.well-known/ddos-guard');
+}
+
 // Helper to modify HTML links
 function rewriteLinks(html, baseUrl) {
   const $ = cheerio.load(html);
@@ -78,12 +83,16 @@ function rewriteLinks(html, baseUrl) {
   elements.forEach(({ selector, attr }) => {
     $(selector).each((_, el) => {
       const val = $(el).attr(attr);
+      // Skip captcha/DDOS-Guard resources
+      if (isCaptchaUrl(val)) return;
       if (!val) return;
       if (attr !== 'srcset' && (val.startsWith('javascript:') || val.startsWith('mailto:') || val.startsWith('#'))) return;
       if (attr === 'srcset') {
         const parts = val.split(',').map(part => {
           const [u, descriptor] = part.trim().split(/\s+/, 2);
           if (u.startsWith('data:')) return part.trim();
+          // Skip captcha/DDOS-Guard resources
+          if (isCaptchaUrl(u)) return part.trim();
           try {
             const abs = new URL(u, baseUrl).href;
             const p = `/proxy?url=${encodeURIComponent(abs)}`;
@@ -119,6 +128,18 @@ app.get('/proxy', async (req, res) => {
       urlObj.searchParams.append(key, val);
     });
     targetUrl = urlObj.href;
+    // Bypass captcha/DDOS-Guard URLs: stream directly without rewriting
+    if (isCaptchaUrl(targetUrl)) {
+      try {
+        const resp = await axios.get(targetUrl, { responseType: 'arraybuffer', validateStatus: status => status < 500 });
+        const ct = resp.headers['content-type'] || '';
+        res.set('content-type', ct);
+        return res.send(resp.data);
+      } catch (e) {
+        console.error('Captcha proxy error:', e.message);
+        return res.status(500).send('Captcha proxy error');
+      }
+    }
   } else if ('q' in req.query) {
     // fallback for Google search submissions without url
     const params = new URLSearchParams(req.query).toString();
@@ -236,7 +257,15 @@ app.get('/', async (req, res) => {
   // If search query exists, fetch and process search results
   if (q) {
     try {
-      const ddgRes = await axios.get('https://duckduckgo.com/html/', { params: { q } });
+      // Use DuckDuckGo lite HTML endpoint with browser-like headers
+      const ddgUrl = 'https://html.duckduckgo.com/html/';
+      const ddgRes = await axios.get(ddgUrl, {
+        params: { q },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9'
+        }
+      });
       const html = ddgRes.data;
       const $ = cheerio.load(html);
       const results = [];
@@ -265,6 +294,29 @@ app.get('/', async (req, res) => {
           // skip invalid URLs
         }
       });
+      
+      // Fallback to Bing RSS search if no DDG results
+      if (results.length === 0) {
+        try {
+          const bingRes = await axios.get('https://www.bing.com/search', {
+            params: { q, format: 'rss', mkt: 'en-US' },
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+              'Accept-Language': 'en-US,en;q=0.9'
+            }
+          });
+          const xml = bingRes.data;
+          const $xml = cheerio.load(xml, { xmlMode: true });
+          $xml('item').each((i, el) => {
+            const title = $xml(el).find('title').text().trim();
+            const link = $xml(el).find('link').text().trim();
+            const snippet = $xml(el).find('description').text().trim();
+            if (title && link) results.push({ title, href: link, snippet });
+          });
+        } catch (e) {
+          console.error('Fallback search error:', e.message);
+        }
+      }
       
       if (results.length > 0) {
         resultsHtml = `
