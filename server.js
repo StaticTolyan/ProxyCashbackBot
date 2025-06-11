@@ -83,8 +83,8 @@ function rewriteLinks(html, baseUrl) {
   elements.forEach(({ selector, attr }) => {
     $(selector).each((_, el) => {
       const val = $(el).attr(attr);
-      // Skip captcha/DDOS-Guard resources
-      if (isCaptchaUrl(val)) return;
+      // We still want to proxy assets OF captcha pages, so the isCaptchaUrl check is removed here.
+      // The main proxy route's isCaptchaUrl check prevents the *content* of the captcha page itself from being rewritten.
       if (!val) return;
       if (attr !== 'srcset' && (val.startsWith('javascript:') || val.startsWith('mailto:') || val.startsWith('#'))) return;
       if (attr === 'srcset') {
