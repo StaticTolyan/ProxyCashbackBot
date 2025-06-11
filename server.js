@@ -130,8 +130,6 @@ app.get('/proxy', async (req, res) => {
     });
     targetUrl = urlObj.href;
     // Bypass captcha/DDOS-Guard URLs: stream directly without rewriting
-    // For captcha/DDOS-Guard pages, use a less intrusive method to fix asset paths
-    // to avoid breaking their scripts with full HTML parsing.
     if (isCaptchaUrl(targetUrl)) {
       try {
         const captchaAxiosOpts = {
@@ -162,12 +160,21 @@ app.get('/proxy', async (req, res) => {
 
         if (contentType.includes('text/html')) {
           let html = resp.data.toString('utf-8');
-          // Inject a <base> tag to correctly resolve relative asset paths through the proxy.
-          const baseHref = `/proxy?url=${encodeURIComponent(targetUrl)}`;
-          html = html.replace(/<head>/i, `<head><base href="${baseHref}">`);
+          const baseUrl = targetUrl;
+
+          // Use regex to rewrite relative asset paths without full parsing, to avoid breaking scripts.
+          const regex = /(href|src)=(["'])(?!data:|https?:|#|javascript:|[\/]{2})([^\"']+?)\2/g;
+          html = html.replace(regex, (match, attr, quote, relativeUrl) => {
+            try {
+              const absoluteUrl = new URL(relativeUrl, baseUrl).href;
+              const proxyUrl = `/proxy?url=${encodeURIComponent(absoluteUrl)}`;
+              return `${attr}=${quote}${proxyUrl}${quote}`;
+            } catch (e) {
+              return match; // If URL creation fails, return the original match
+            }
+          });
           return res.send(html);
         } else {
-          // For non-HTML assets of the captcha page, send directly.
           return res.send(resp.data);
         }
       } catch (e) {
