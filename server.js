@@ -149,34 +149,15 @@ app.get('/proxy', async (req, res) => {
         }
 
         const resp = await axios.get(targetUrl, captchaAxiosOpts);
-        const contentType = resp.headers['content-type'] || '';
         
         const respSetCookieHeaders = resp.headers['set-cookie'];
         if (respSetCookieHeaders) {
           res.setHeader('Set-Cookie', respSetCookieHeaders);
         }
 
-        res.set('content-type', contentType);
-
-        if (contentType.includes('text/html')) {
-          let html = resp.data.toString('utf-8');
-          const baseUrl = targetUrl;
-
-          // Use regex to rewrite relative asset paths without full parsing, to avoid breaking scripts.
-          const regex = /(href|src)=(["'])(?!data:|https?:|#|javascript:|[\/]{2})([^\"']+?)\2/g;
-          html = html.replace(regex, (match, attr, quote, relativeUrl) => {
-            try {
-              const absoluteUrl = new URL(relativeUrl, baseUrl).href;
-              const proxyUrl = `/proxy?url=${encodeURIComponent(absoluteUrl)}`;
-              return `${attr}=${quote}${proxyUrl}${quote}`;
-            } catch (e) {
-              return match; // If URL creation fails, return the original match
-            }
-          });
-          return res.send(html);
-        } else {
-          return res.send(resp.data);
-        }
+        res.set('content-type', resp.headers['content-type'] || '');
+        // Send the captcha page completely unmodified. The catch-all route below will handle its assets.
+        return res.send(resp.data);
       } catch (e) {
         console.error('Captcha proxy error:', e.message);
         return res.status(500).send('Captcha proxy error');
@@ -541,6 +522,60 @@ app.get('/', async (req, res) => {
   </body>
 </html>
   `);
+});
+
+// This catch-all route handles asset requests from unmodified captcha pages.
+// It MUST be the last route to avoid intercepting other valid paths.
+app.get('/*', async (req, res) => {
+  const referer = req.headers.referer;
+
+  // Only proceed if the request is coming from one of our proxied pages.
+  if (!referer || !referer.includes('/proxy?url=')) {
+    return res.status(404).send('Not Found');
+  }
+
+  try {
+    const refererUrl = new URL(referer);
+    const originalTargetUrl = refererUrl.searchParams.get('url');
+
+    if (!originalTargetUrl) {
+      return res.status(400).send('Bad Request: Missing original URL in referer.');
+    }
+    
+    // Construct the full URL for the requested asset.
+    const assetUrl = new URL(req.originalUrl, originalTargetUrl).href;
+    
+    console.log(`Proxying asset from referer: ${assetUrl}`);
+
+    const assetAxiosOpts = {
+      responseType: 'arraybuffer',
+      validateStatus: status => status < 500,
+      headers: {
+        'User-Agent': req.headers['user-agent'],
+        'Accept-Language': req.headers['accept-language'],
+        'Accept': req.headers['accept'],
+        'Referer': originalTargetUrl, // Set referer to the original page
+      },
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+    };
+    if (req.headers.cookie) {
+      assetAxiosOpts.headers['Cookie'] = req.headers.cookie;
+    }
+
+    const resp = await axios.get(assetUrl, assetAxiosOpts);
+
+    const respSetCookieHeaders = resp.headers['set-cookie'];
+    if (respSetCookieHeaders) {
+      res.setHeader('Set-Cookie', respSetCookieHeaders);
+    }
+    
+    res.set('content-type', resp.headers['content-type']);
+    res.send(resp.data);
+
+  } catch (e) {
+    console.error(`Asset proxy error for ${req.originalUrl}:`, e.message);
+    res.status(500).send('Asset proxy error');
+  }
 });
 
 app.listen(PORT, () => {
