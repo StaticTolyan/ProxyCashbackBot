@@ -253,7 +253,7 @@ app.get('/proxy', async (req, res) => {
 app.get('/', async (req, res) => {
   const { q } = req.query;
   let resultsHtml = '';
-  
+
   // If search query exists, fetch and process search results
   if (q) {
     try {
@@ -269,13 +269,13 @@ app.get('/', async (req, res) => {
       const html = ddgRes.data;
       const $ = cheerio.load(html);
       const results = [];
-      
+
       $('a.result__a').each((i, el) => {
         const $el = $(el);
         const title = $el.text().trim();
         let href = $el.attr('href');
         if (!href) return;
-        
+
         try {
           const parsed = new URL(href, 'https://duckduckgo.com');
           let link;
@@ -294,7 +294,7 @@ app.get('/', async (req, res) => {
           // skip invalid URLs
         }
       });
-      
+
       // Fallback to Bing RSS search if no DDG results
       if (results.length === 0) {
         try {
@@ -317,14 +317,14 @@ app.get('/', async (req, res) => {
           console.error('Fallback search error:', e.message);
         }
       }
-      
+
       if (results.length > 0) {
         resultsHtml = `
         <div class="mt-3 mt-md-4">
           <h2 class="text-center mb-2 mb-md-3">Search results for "${q}"</h2>
           <ul class="list-group mb-3 mb-md-4">
         `;
-        
+
         results.forEach(r => {
           resultsHtml += `
           <li class="list-group-item">
@@ -333,7 +333,7 @@ app.get('/', async (req, res) => {
           </li>
           `;
         });
-        
+
         resultsHtml += `</ul></div>`;
       } else {
         resultsHtml = `
@@ -352,7 +352,7 @@ app.get('/', async (req, res) => {
       `;
     }
   }
-  
+
   // Send complete HTML response
   res.send(`
 <!DOCTYPE html>
@@ -362,6 +362,44 @@ app.get('/', async (req, res) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>${q ? `Search: ${q} - ` : ''}Cashback-Bot Proxy</title>
     <link href="https://bootswatch.com/5/cyborg/bootstrap.min.css" rel="stylesheet">
+    <script>
+      // Define the hCaptcha callback function
+      function callbackHCaptcha(token) {
+        console.log('hCaptcha solved successfully!');
+        console.log('Received hCaptcha token:', token);
+
+        // TODO: You MUST send this 'token' to your server for verification.
+        // The server will then make a request to hCaptcha's verification endpoint.
+        // Only after successful server-side verification should you trust the captcha.
+
+        // Example of how you might send the token to your server:
+        /*
+        fetch('/your-server-verify-endpoint', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ captchaToken: token }),
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            console.log('Server-side verification successful.');
+            // Proceed with the action protected by the captcha (e.g., form submission)
+          } else {
+            console.error('Server-side verification failed:', data.message || 'Unknown error');
+            alert('Captcha verification failed. Please try again.');
+          }
+        })
+        .catch(error => {
+          console.error('Error sending token for verification:', error);
+          alert('An error occurred while verifying the captcha. Please try again.');
+        });
+        */
+      }
+      // Ensure the function is globally accessible
+      window.callbackHCaptcha = callbackHCaptcha;
+    </script>
     <style>
       /* Mobile-first base styles */
       body { 
