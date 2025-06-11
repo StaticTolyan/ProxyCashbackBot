@@ -131,9 +131,33 @@ app.get('/proxy', async (req, res) => {
     // Bypass captcha/DDOS-Guard URLs: stream directly without rewriting
     if (isCaptchaUrl(targetUrl)) {
       try {
-        const resp = await axios.get(targetUrl, { responseType: 'arraybuffer', validateStatus: status => status < 500 });
+        // For captcha URLs, still fetch, but ensure cookies are handled
+        const captchaAxiosOpts = {
+          responseType: 'arraybuffer',
+          validateStatus: status => status < 500,
+          headers: {
+            'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
+            'Accept-Language': req.headers['accept-language'] || 'en-US,en;q=0.9',
+            'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Referer': req.headers['referer'] ? req.headers['referer'].replace(req.headers.host, new URL(targetUrl).host) : new URL(targetUrl).origin + '/',
+          },
+          httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+          maxRedirects: 5
+        };
+        if (req.headers.cookie) {
+          captchaAxiosOpts.headers['Cookie'] = req.headers.cookie;
+        }
+
+        const resp = await axios.get(targetUrl, captchaAxiosOpts);
         const ct = resp.headers['content-type'] || '';
+        
+        const respSetCookieHeaders = resp.headers['set-cookie'];
+        if (respSetCookieHeaders) {
+          res.setHeader('Set-Cookie', respSetCookieHeaders);
+        }
+
         res.set('content-type', ct);
+        // Do NOT rewrite links for these specific captcha/ddos-guard URLs
         return res.send(resp.data);
       } catch (e) {
         console.error('Captcha proxy error:', e.message);
@@ -177,17 +201,35 @@ app.get('/proxy', async (req, res) => {
   }
   try {
     // Build axios options, mimic browser, and accept up to 4xx status for proxying
+    const requestHeaders = {
+        'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
+        'Accept-Language': req.headers['accept-language'] || 'en-US,en;q=0.9',
+        'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Referer': req.headers['referer'] ? req.headers['referer'].replace(req.headers.host, new URL(targetUrl).host) : new URL(targetUrl).origin + '/', // Adjust referer
+        // Forward other relevant headers
+        // Be careful not to forward headers that might break things, like Host or proxy-specific headers
+      };
+
+      if (req.headers.cookie) {
+        requestHeaders['Cookie'] = req.headers.cookie;
+      }
+
     const axiosOpts = {
       responseType: 'arraybuffer',
       validateStatus: status => status < 500,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-      },
-      httpsAgent: new https.Agent({ rejectUnauthorized: false })
+      headers: requestHeaders,
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+      maxRedirects: 5 // Allow axios to handle some redirects, but we might need more control
     };
     const response = await axios.get(targetUrl, axiosOpts);
+
+    // Forward Set-Cookie headers from target to client
+    const setCookieHeaders = response.headers['set-cookie'];
+    if (setCookieHeaders) {
+      // Ensure cookies are correctly pathed for the proxy domain if necessary, though often direct forwarding works.
+      // For simplicity, direct forwarding first. Complex scenarios might need path rewriting.
+      res.setHeader('Set-Cookie', setCookieHeaders);
+    }
     const contentType = (response.headers['content-type'] || '').toLowerCase();
 
     if (contentType.includes('text/html')) {
@@ -362,44 +404,6 @@ app.get('/', async (req, res) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>${q ? `Search: ${q} - ` : ''}Cashback-Bot Proxy</title>
     <link href="https://bootswatch.com/5/cyborg/bootstrap.min.css" rel="stylesheet">
-    <script>
-      // Define the hCaptcha callback function
-      function callbackHCaptcha(token) {
-        console.log('hCaptcha solved successfully!');
-        console.log('Received hCaptcha token:', token);
-
-        // TODO: You MUST send this 'token' to your server for verification.
-        // The server will then make a request to hCaptcha's verification endpoint.
-        // Only after successful server-side verification should you trust the captcha.
-
-        // Example of how you might send the token to your server:
-        /*
-        fetch('/your-server-verify-endpoint', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ captchaToken: token }),
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            console.log('Server-side verification successful.');
-            // Proceed with the action protected by the captcha (e.g., form submission)
-          } else {
-            console.error('Server-side verification failed:', data.message || 'Unknown error');
-            alert('Captcha verification failed. Please try again.');
-          }
-        })
-        .catch(error => {
-          console.error('Error sending token for verification:', error);
-          alert('An error occurred while verifying the captcha. Please try again.');
-        });
-        */
-      }
-      // Ensure the function is globally accessible
-      window.callbackHCaptcha = callbackHCaptcha;
-    </script>
     <style>
       /* Mobile-first base styles */
       body { 
