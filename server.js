@@ -83,8 +83,9 @@ function rewriteLinks(html, baseUrl) {
   elements.forEach(({ selector, attr }) => {
     $(selector).each((_, el) => {
       const val = $(el).attr(attr);
-      // We still want to proxy assets OF captcha pages, so the isCaptchaUrl check is removed here.
-      // The main proxy route's isCaptchaUrl check prevents the *content* of the captcha page itself from being rewritten.
+      // The original check is restored here, as the new <base> tag strategy for captcha pages
+      // means we don't need rewriteLinks to handle their assets.
+      if (isCaptchaUrl(val)) return;
       if (!val) return;
       if (attr !== 'srcset' && (val.startsWith('javascript:') || val.startsWith('mailto:') || val.startsWith('#'))) return;
       if (attr === 'srcset') {
@@ -129,9 +130,10 @@ app.get('/proxy', async (req, res) => {
     });
     targetUrl = urlObj.href;
     // Bypass captcha/DDOS-Guard URLs: stream directly without rewriting
+    // For captcha/DDOS-Guard pages, use a less intrusive method to fix asset paths
+    // to avoid breaking their scripts with full HTML parsing.
     if (isCaptchaUrl(targetUrl)) {
       try {
-        // For captcha URLs, still fetch, but ensure cookies are handled
         const captchaAxiosOpts = {
           responseType: 'arraybuffer',
           validateStatus: status => status < 500,
@@ -149,16 +151,25 @@ app.get('/proxy', async (req, res) => {
         }
 
         const resp = await axios.get(targetUrl, captchaAxiosOpts);
-        const ct = resp.headers['content-type'] || '';
+        const contentType = resp.headers['content-type'] || '';
         
         const respSetCookieHeaders = resp.headers['set-cookie'];
         if (respSetCookieHeaders) {
           res.setHeader('Set-Cookie', respSetCookieHeaders);
         }
 
-        res.set('content-type', ct);
-        // Do NOT rewrite links for these specific captcha/ddos-guard URLs
-        return res.send(resp.data);
+        res.set('content-type', contentType);
+
+        if (contentType.includes('text/html')) {
+          let html = resp.data.toString('utf-8');
+          // Inject a <base> tag to correctly resolve relative asset paths through the proxy.
+          const baseHref = `/proxy?url=${encodeURIComponent(targetUrl)}`;
+          html = html.replace(/<head>/i, `<head><base href="${baseHref}">`);
+          return res.send(html);
+        } else {
+          // For non-HTML assets of the captcha page, send directly.
+          return res.send(resp.data);
+        }
       } catch (e) {
         console.error('Captcha proxy error:', e.message);
         return res.status(500).send('Captcha proxy error');
